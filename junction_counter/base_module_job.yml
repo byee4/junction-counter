@@ -1,0 +1,5 @@
+#!/usr/bin/env cwl-runner
+
+first_number: 5
+second_number: 4
+
