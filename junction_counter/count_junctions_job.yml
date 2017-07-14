@@ -1,0 +1,5 @@
+#!/usr/bin/env cwl-runner
+
+jxnfile: data/jxnlist.txt
+bam: somebam.bam
+outfile data/output.txt

@@ -4,15 +4,10 @@
 basic module to use as an example.
 """
 import argparse
-import matplotlib.pyplot as plt
-import seaborn as sns
 import pandas as pd
-import os
-import re
-import glob
 import pysam
 
-from tqdm import tnrange, tqdm_notebook
+from tqdm import trange
 from collections import defaultdict
 
 def get_offset_m_basedon_n(
@@ -92,7 +87,7 @@ def parse_jxn_string(jxn_string):
     return chrom, int(start), int(stop), strand
 
 
-def return_spliced_junction_counts(jxn_string, bam_file):
+def return_spliced_junction_counts(jxn_string, bam_file, min_overlap):
     aligned_file = pysam.AlignmentFile(bam_file, "rb")
     chrom, start, stop, strand = parse_jxn_string(jxn_string)
 
@@ -132,8 +127,14 @@ def return_spliced_junction_counts(jxn_string, bam_file):
             # the one in focus.
             ###
             for j in range(1, jxc_count + 1):
-                left, right = get_offset_m_basedon_n(read.cigartuples, j, True,
-                                                     True, True)
+                left, right = get_offset_m_basedon_n(
+                    read.cigartuples, j, True, True, True
+                )
+                left_wo, right_wo = get_offset_m_basedon_n(
+                    read.cigartuples, j, False, False, False
+                )
+                if left_wo < min_overlap or right_wo < min_overlap:
+                    skip = True
                 # if read.query_name == 'D80KHJN1:241:C5HF7ACXX:6:1105:6615:43587':
                 #     print("RIGHT", read.reference_end, right, int(row['low_exon_end']), read.flag, read.cigartuples)
                 #     print("LEFT", read.reference_start, read.query_alignment_start, left, int(row['low_exon_end']), read.flag)
@@ -153,12 +154,13 @@ def return_spliced_junction_counts(jxn_string, bam_file):
     return depth, names[:-1]
 
 
-def get_junction_sites(jxn_list, bam_file):
+def get_junction_sites(jxn_list, bam_file, min_overlap):
     jxn_dict = defaultdict(dict)
-
+    progress = trange(len(jxn_list))
     for jxn in jxn_list:
-        depth, names = return_spliced_junction_counts(jxn, bam_file)
+        depth, names = return_spliced_junction_counts(jxn, bam_file, min_overlap)
         jxn_dict[jxn] = {'depth': depth, 'names': names}
+        progress.update(1)
     return pd.DataFrame(jxn_dict).T
 
 
@@ -169,7 +171,7 @@ def main():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--jxnfile",
+        "--jxn_file",
         required=True,
     )
     parser.add_argument(
@@ -180,18 +182,24 @@ def main():
         "--outfile",
         required=True,
     )
+    parser.add_argument(
+        "--min_overlap",
+        required=False,
+        default=0,
+        type=int
+    )
     args = parser.parse_args()
 
-    jxn_file = args.jxnfile
+    jxn_file = args.jxn_file
     out_file = args.outfile
     bam = args.bam
-
+    min_overlap = args.min_overlap
     jxn_list = []
     with open(jxn_file, 'r') as f:
         for line in f:
             jxn_list.append(line.rstrip())
 
-    jxc_df = get_junction_sites(jxn_list, bam)
+    jxc_df = get_junction_sites(jxn_list, bam, min_overlap)
     jxc_df.to_csv(out_file, sep='\t')
 
 if __name__ == "__main__":
