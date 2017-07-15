@@ -96,6 +96,7 @@ def return_spliced_junction_counts(jxn_string, bam_file, min_overlap):
         "WARNING: junction site is greater than 1 nt: {}".format(jxn_string))
 
     depth = 0  # initial number of reads supporting junction
+    names_list = []
     names = ''  # string of 'comma delimited' names of all reads supporting junction
     badflags = []  # flags of all the skipped reads, if failed QC (for debugging mostly)
 
@@ -112,10 +113,12 @@ def return_spliced_junction_counts(jxn_string, bam_file, min_overlap):
 
         jxc_count = 0  # number of junctions in the read
         if 'N' in read.cigarstring:  # only consider reads with jxns
-            """ We need this?
-            if read.get_tag('XS') != row['strand']:
+            ### WARNING THIS ASSUMES TRUSEQ PAIRED END ###
+            if read.is_reverse and read.is_read2:
                 skip = True
-            """
+            if not read.is_reverse and read.is_read1:
+                skip = True
+
             if (
             not read.is_proper_pair) or read.is_qcfail or read.is_secondary:
                 skip = True
@@ -149,9 +152,12 @@ def return_spliced_junction_counts(jxn_string, bam_file, min_overlap):
             if left_span == False and right_span == False:
                 skip = True
             if not skip:
-                names += read.query_name + ','
-                depth += 1
-    return depth, names[:-1]
+                names_list.append(read.query_name)
+
+    ### Removing duplicated names will filter double counting R1/R2 if they span the same region.
+    for name in set(names_list):
+        names += name + ','
+    return len(set(names_list)), names[:-1]
 
 
 def get_junction_sites(jxn_list, bam_file, min_overlap):
