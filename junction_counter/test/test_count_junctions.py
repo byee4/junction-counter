@@ -4,11 +4,11 @@ import pysam
 """
 To create a single read bam file:
 
-samtools view data/ENCFF756RDZ.bam | grep 'D80KHJN1:241:C5HF7ACXX:6:2207:4811:73625' > \
+samtools view data/ENCFF756RDZ.bam | grep 'D80KHJN1:241:C5HF7ACXX:6:2113:6890:67612' > \
 data/tmp.sam;
 cat data/header.txt data/tmp.sam | samtools view \
--bS > junction_counter/test/bams/single_junction_skip_2.bam;
-samtools index junction_counter/test/bams/single_junction_skip_2.bam
+-bS > junction_counter/test/bams/single_junction_skip_4.bam;
+samtools index junction_counter/test/bams/single_junction_skip_4.bam
 """
 def single_jxn_skip_overlapping_mate_1():
     """
@@ -37,6 +37,20 @@ def single_jxn_skip_2():
     :return:
     """
     return 'bams/single_junction_skip_2.bam'
+
+def single_jxn_skip_3():
+    """
+    D80KHJN1:241:C5HF7ACXX:6:1309:15137:12983
+    :return:
+    """
+    return 'bams/single_junction_skip_3.bam'
+
+def single_jxn_skip_4():
+    """
+    D80KHJN1:241:C5HF7ACXX:6:2113:6890:67612
+    :return:
+    """
+    return 'bams/single_junction_skip_4.bam'
 
 
 def single_jxn_no_skip_1():
@@ -190,14 +204,58 @@ def test_single_junction_skip_2():
     print("Tests a single read with a single junction N")
     print("Region: chr10:122666367-122668067:+")
     print("Read: D80KHJN1:241:C5HF7ACXX:6:2207:4811:73625")
-    print("Should support skipping (read spans this region(intron)")
+    print("Should not support skipping (read span is less than min_overlap (11))")
     bam = single_jxn_skip_2()
     jxc_coord = 'chr10:122666367-122668067:+'
     sk, inc, skn, incn = j.return_spliced_junction_counts(
         jxc_coord, bam, 11
     )
     assert sk == 0
-    # assert skn == 'D80KHJN1:241:C5HF7ACXX:6:2207:4811:73625'
+    assert inc == 0
+
+def test_right_span_4():
+    print("Tests a single read with a single junction N")
+    print("Region: chr10:122666367-122668067:+")
+    print("Read: D80KHJN1:241:C5HF7ACXX:6:2113:6890:67612")
+    print("Should support skipping (read spans this region(intron)")
+    bam = single_jxn_skip_4()
+    jxc_coord = 'chr10:122666367-122668067:+'
+    min_overlap = 1
+    aligned_file = pysam.AlignmentFile(bam, "rb")
+    chrom, five, three, strand = j.parse_jxn_string(jxc_coord)
+    for read in aligned_file.fetch(chrom, five-min_overlap, five):
+        skip, incl = j.right_span(read, five, min_overlap)
+        assert skip == True
+        assert incl == False
+
+
+def test_left_span_4():
+    print("Tests a single read with a single junction N")
+    print("Region: chr10:122666367-122668067:+")
+    print("Read: D80KHJN1:241:C5HF7ACXX:6:2113:6890:67612")
+    print("Should support skipping (read spans this region(intron)")
+    bam = single_jxn_skip_4()
+    jxc_coord = 'chr10:122666367-122668067:+'
+    min_overlap = 8
+    aligned_file = pysam.AlignmentFile(bam, "rb")
+    chrom, five, three, strand = j.parse_jxn_string(jxc_coord)
+    for read in aligned_file.fetch(chrom, five - min_overlap, five):
+        skip, incl = j.left_span(read, three, min_overlap)
+        assert skip == False
+        assert incl == False
+
+
+def test_single_junction_skip_4():
+    print("Tests a single read with a single junction N")
+    print("Region: chr10:122666367-122668067:+")
+    print("Read: D80KHJN1:241:C5HF7ACXX:6:2113:6890:67612")
+    print("Should not support skipping (read span is less than min_overlap (8))")
+    bam = single_jxn_skip_4()
+    jxc_coord = 'chr10:122666367-122668067:+'
+    sk, inc, skn, incn = j.return_spliced_junction_counts(
+        jxc_coord, bam, 8
+    )
+    assert sk == 0
     assert inc == 0
 
 def test_single_junction_no_skip_1():
@@ -325,6 +383,21 @@ def test_inclusion_4():
     assert inc == 1
     assert incn == 'D80KHJN1:241:C5HF7ACXX:6:1301:3675:25338'
 
+def test_right_span_inclusion_7():
+    print("Tests a single read with a single junction N")
+    print("Region: chr10:122666367-122668067:+")
+    print("Read: D80KHJN1:241:C5HF7ACXX:6:2207:4811:73625")
+    print("Should support skipping (read spans this region(intron)")
+    bam = inclusion_7()
+    jxc_coord = 'chr10:122666367-122668067:+'
+    min_overlap = 34
+    aligned_file = pysam.AlignmentFile(bam, "rb")
+    chrom, five, three, strand = j.parse_jxn_string(jxc_coord)
+    for read in aligned_file.fetch(chrom, five-min_overlap, five):
+        skip, incl = j.right_span(read, five, min_overlap)
+        assert skip == False
+        assert incl == False
+
 def test_inclusion_7():
     print("Tests whether a read that is an inclusion read "
           "(r2 does not meet the min overlap but r1 does) "
@@ -335,7 +408,7 @@ def test_inclusion_7():
     bam = inclusion_7()
     jxc_coord = 'chr10:122666367-122668067:+'
     sk, inc, skn, incn = j.return_spliced_junction_counts(
-        jxc_coord, bam, 35
+        jxc_coord, bam, 34
     )
     assert sk == 0
     assert inc == 1

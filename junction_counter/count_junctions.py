@@ -256,7 +256,7 @@ def right_span(read, five, min_overlap):
     else:  # no N's found, just need to determine whether this read overlaps
         # if a read doesn't span an intron, it doesn't support skipping.
         supports_skipping = False
-        if read.get_overlap(five, five+min_overlap) > 0:
+        if read.get_overlap(five+min_overlap, five+min_overlap+1) > 0:
             supports_inclusion = True
         else:
             supports_inclusion = False
@@ -348,7 +348,7 @@ def total_inclusion(read, five, three):
         return False
 
 
-def return_spliced_junction_counts(jxn_string, bam_file, min_overlap, library):
+def return_spliced_junction_counts(jxn_string, bam_file, min_overlap, library='reverse_pe'):
     """
     Returns the junction inclusion and exclusion counts for a given junction.
     
