@@ -159,9 +159,11 @@ def test_single_junction_skip_1():
     print("Read: D80KHJN1:241:C5HF7ACXX:6:1307:9279:87799")
     print("Should support skipping (read spans this region(intron)")
     bam = single_jxn_skip_1()
+    min_overlap = 1
+    jxc_only = False
     jxc_coord = 'chr10:135209281-135209666:+'
     sk, inc, skn, incn = j.return_spliced_junction_counts(
-        jxc_coord, bam, 1
+        jxc_coord, bam, min_overlap, jxc_only
     )
     assert sk == 1
     assert skn == 'D80KHJN1:241:C5HF7ACXX:6:1307:9279:87799'
@@ -204,14 +206,55 @@ def test_single_junction_skip_2():
     print("Tests a single read with a single junction N")
     print("Region: chr10:122666367-122668067:+")
     print("Read: D80KHJN1:241:C5HF7ACXX:6:2207:4811:73625")
-    print("Should not support skipping (read span is less than min_overlap (11))")
+    print("Should not support skipping "
+          "(read span is less than min_overlap (11))")
     bam = single_jxn_skip_2()
+    min_overlap = 11
+    jxc_only = False
     jxc_coord = 'chr10:122666367-122668067:+'
+    library = 'reverse_pe'
     sk, inc, skn, incn = j.return_spliced_junction_counts(
-        jxc_coord, bam, 11
+        jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
     assert inc == 0
+
+def test_single_junction_skip_2_2():
+    print("Tests a single read with a single junction N")
+    print("Region: chr10:122666367-122668067:+")
+    print("Read: D80KHJN1:241:C5HF7ACXX:6:2207:4811:73625")
+    print("Should support skipping "
+          "(read span covers min_overlap (10))")
+    bam = single_jxn_skip_2()
+    min_overlap = 10
+    jxc_only = False
+    jxc_coord = 'chr10:122666367-122668067:+'
+    library = 'reverse_pe'
+    sk, inc, skn, incn = j.return_spliced_junction_counts(
+        jxc_coord, bam, min_overlap, jxc_only, library
+    )
+    assert sk == 1
+    assert inc == 0
+
+
+def test_single_junction_skip_2_3():
+    print("Tests a single read with a single junction N")
+    print("Region: chr10:122666367-122668067:+")
+    print("Read: D80KHJN1:241:C5HF7ACXX:6:2207:4811:73625")
+    print("Should support skipping "
+          "(read span covers min_overlap (10))"
+          "(jxn_only = True should not change skipping result.")
+    bam = single_jxn_skip_2()
+    min_overlap = 10
+    jxc_only = True
+    jxc_coord = 'chr10:122666367-122668067:+'
+    library = 'reverse_pe'
+    sk, inc, skn, incn = j.return_spliced_junction_counts(
+        jxc_coord, bam, min_overlap, jxc_only, library
+    )
+    assert sk == 1
+    assert inc == 0
+
 
 def test_right_span_4():
     print("Tests a single read with a single junction N")
@@ -251,9 +294,12 @@ def test_single_junction_skip_4():
     print("Read: D80KHJN1:241:C5HF7ACXX:6:2113:6890:67612")
     print("Should not support skipping (read span is less than min_overlap (8))")
     bam = single_jxn_skip_4()
+    min_overlap = 8
+    jxc_only = False
     jxc_coord = 'chr10:122666367-122668067:+'
+    library = 'reverse_pe'
     sk, inc, skn, incn = j.return_spliced_junction_counts(
-        jxc_coord, bam, 8
+        jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
     assert inc == 0
@@ -265,9 +311,12 @@ def test_single_junction_no_skip_1():
     print("Should be filtered (flags 161/81 indicate "
           "they are not properly paired")
     bam = single_jxn_no_skip_1()
+    min_overlap = 1
+    jxc_only = False
     jxc_coord = 'chr16:83842351-83842909:+'
+    library = 'reverse_pe'
     sk, inc, skn, incn = j.return_spliced_junction_counts(
-        jxc_coord, bam, 1
+        jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
     assert inc == 0
@@ -275,13 +324,16 @@ def test_single_junction_no_skip_1():
 
 def test_single_junction_no_skip_2():
     print("Tests a single read with a single junction N")
-    print("Region: ")
+    print("Region: chr1:40319740-40322948:-")
     print("Read: D80KHJN1:241:C5HF7ACXX:6:1314:11862:13068")
     print("Should be filtered as reads support junctions but not this one")
     bam = single_jxn_no_skip_2()
+    min_overlap = 1
+    jxc_only = False
     jxc_coord = 'chr1:40319740-40322948:-'
+    library = 'reverse_pe'
     sk, inc, skn, incn = j.return_spliced_junction_counts(
-        jxc_coord, bam, 1
+        jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
     assert inc == 0
@@ -298,9 +350,12 @@ def test_single_junction_overlapping_mate_1():
     print("Should return just 1 read supporting this skipping, "
           "we dont want to double count overlapping mates")
     bam = single_jxn_skip_overlapping_mate_1()
+    min_overlap = 1
+    jxc_only = False
     jxc_coord = 'chr16:83842351-83842909:+' # ENST00000433866.2_intron_1_0_chr16_83842352_f
+    library = 'reverse_pe'
     sk, inc, skn, incn = j.return_spliced_junction_counts(
-        jxc_coord, bam, 1
+        jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 1
     assert skn == 'D80KHJN1:241:C5HF7ACXX:6:1314:9778:90604'
@@ -313,9 +368,12 @@ def test_single_junction_overlapping_mate_2():
     print("Should return just 1 read supporting this skipping, "
           "we dont want to double count overlapping mates")
     bam = single_jxn_skip_overlapping_mate_2()
+    min_overlap = 1
+    jxc_only = False
+    library = 'reverse_pe'
     jxc_coord = 'chr1:40319740-40322948:-'
     sk, inc, skn, incn = j.return_spliced_junction_counts(
-        jxc_coord, bam, 1
+        jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 1
     assert skn == 'D80KHJN1:241:C5HF7ACXX:6:1310:8490:70959'
@@ -329,9 +387,12 @@ def test_multi_junction_skip_1():
     print("This read supports this junction but also others, "
           "so should call this as +1 for skipping")
     bam = multi_jxn_skip_1()
+    min_overlap = 1
+    jxc_only = False
     jxc_coord = 'chr10:135212730-135213032:+'
+    library = 'reverse_pe'
     sk, inc, skn, incn = j.return_spliced_junction_counts(
-        jxc_coord, bam, 1
+        jxc_coord, bam, min_overlap, jxc_only, library
     )
 
     assert sk == 1
@@ -345,9 +406,12 @@ def test_inclusion_1():
     print("Read: D80KHJN1:241:C5HF7ACXX:6:1213:6350:10569")
     print("Read should be called as included and not excluded.")
     bam = inclusion_1()
+    min_overlap = 1
+    jxc_only = False
     jxc_coord = 'chr1:40319740-40322948:-'
+    library = 'reverse_pe'
     sk, inc, skn, incn = j.return_spliced_junction_counts(
-        jxc_coord, bam, 1
+        jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
     assert inc == 1
@@ -360,9 +424,12 @@ def test_inclusion_2():
     print("Read: D80KHJN1:241:C5HF7ACXX:6:2103:13975:89570")
     print("Read should be called as included and not excluded.")
     bam = inclusion_2()
+    min_overlap = 1
+    jxc_only = False
     jxc_coord = 'chr1:40319740-40322948:-'
+    library = 'reverse_pe'
     sk, inc, skn, incn = j.return_spliced_junction_counts(
-        jxc_coord, bam, 1
+        jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
     assert inc == 1
@@ -375,22 +442,64 @@ def test_inclusion_4():
     print("Read: D80KHJN1:241:C5HF7ACXX:6:1301:3675:25338")
     print("Read should be called as included and not excluded.")
     bam = inclusion_4()
+    min_overlap = 1
+    jxc_only = False
     jxc_coord = 'chr1:40319740-40322948:-'
+    library = 'reverse_pe'
     sk, inc, skn, incn = j.return_spliced_junction_counts(
-        jxc_coord, bam, 1
+        jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
     assert inc == 1
     assert incn == 'D80KHJN1:241:C5HF7ACXX:6:1301:3675:25338'
 
+def test_inclusion_5():
+    print("Tests whether a read that is completely within the junction span"
+          "is called as inclusion (if we are not just counting junction "
+          "spanning reads (jxc_only is false))")
+    print("Region: chr10:14883239-14884108:+")
+    print("Read: D80KHJN1:241:C5HF7ACXX:6:2114:8225:47562")
+    print("Read should be called as included and not excluded.")
+    bam = inclusion_5()
+    min_overlap = 1
+    jxc_only = False
+    library = 'reverse_pe'
+    jxc_coord = 'chr10:14883239-14884108:+'
+    sk, inc, skn, incn = j.return_spliced_junction_counts(
+        jxc_coord, bam, min_overlap, jxc_only, library
+    )
+    assert sk == 0
+    assert inc == 1
+    assert incn == 'D80KHJN1:241:C5HF7ACXX:6:2114:8225:47562'
+
+def test_inclusion_6():
+    print("Tests whether a read that is completely within the junction span"
+          "is called as nothing (if we are JUST counting junction "
+          "spanning reads (jxc_only is True))")
+    print("Region: chr10:14882156-14884108:+")
+    print("Read: D80KHJN1:241:C5HF7ACXX:6:2114:8225:47562")
+    print("Read should be called as nothing.")
+    bam = inclusion_5()
+    min_overlap = 1
+    jxc_only = True
+    library = 'reverse_pe'
+    jxc_coord = 'chr10:14882156-14884108:+'
+    sk, inc, skn, incn = j.return_spliced_junction_counts(
+        jxc_coord, bam, min_overlap, jxc_only, library
+    )
+    assert sk == 0
+    assert inc == 0
+
 def test_right_span_inclusion_7():
-    print("Tests a single read with a single junction N")
+    print("Tests a inclusion read that doesn't quite overlap over "
+          "the min_overlap reqs")
     print("Region: chr10:122666367-122668067:+")
-    print("Read: D80KHJN1:241:C5HF7ACXX:6:2207:4811:73625")
-    print("Should support skipping (read spans this region(intron)")
+    print("Read: D80KHJN1:241:C5HF7ACXX:6:2113:2908:58516")
+    print("Should support nothing (would support inclusion "
+          "if min overhang wasn't 34")
     bam = inclusion_7()
-    jxc_coord = 'chr10:122666367-122668067:+'
     min_overlap = 34
+    jxc_coord = 'chr10:122666367-122668067:+'
     aligned_file = pysam.AlignmentFile(bam, "rb")
     chrom, five, three, strand = j.parse_jxn_string(jxc_coord)
     for read in aligned_file.fetch(chrom, five-min_overlap, five):
@@ -406,28 +515,15 @@ def test_inclusion_7():
     print("Read: D80KHJN1:241:C5HF7ACXX:6:2113:2908:58516")
     print("Read should be called as included and not excluded.")
     bam = inclusion_7()
+    min_overlap = 34
+    jxc_only = False
+    library = 'reverse_pe'
     jxc_coord = 'chr10:122666367-122668067:+'
     sk, inc, skn, incn = j.return_spliced_junction_counts(
-        jxc_coord, bam, 34
+        jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
     assert inc == 1
-
-
-def test_inclusion_5():
-    print("Tests whether a read that is partially contained within "
-          "a jxn region is correctly called as +1 inclusion")
-    print("Region: chr10:14883239-14884108:+")
-    print("Read: D80KHJN1:241:C5HF7ACXX:6:2114:8225:47562")
-    print("Read should be called as included and not excluded.")
-    bam = inclusion_5()
-    jxc_coord = 'chr10:14883239-14884108:+'
-    sk, inc, skn, incn = j.return_spliced_junction_counts(
-        jxc_coord, bam, 1
-    )
-    assert sk == 0
-    assert inc == 1
-    assert incn == 'D80KHJN1:241:C5HF7ACXX:6:2114:8225:47562'
 
 ### TEST GET_OFFSET_M_BASEDON_N ###
 

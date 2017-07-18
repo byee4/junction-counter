@@ -245,10 +245,11 @@ def right_span(read, five, min_overlap):
             # let's see if it overlaps an intron too
             # if read.query_name == 'D80KHJN1:241:C5HF7ACXX:6:2113:2908:58516':
             #     print('right', read.get_overlap(five+min_overlap, five+min_overlap+1))
-            if read.get_overlap(five+min_overlap, five+min_overlap+1) == 0:
-                supports_inclusion = False
-            else:
+            if (read.get_overlap(five+min_overlap, five+min_overlap+1) > 0) and \
+                    (read.get_overlap(five - 1, five) > 0):
                 supports_inclusion = True
+            else:
+                supports_inclusion = False
         else:
             supports_skipping = True
             supports_inclusion = False
@@ -256,7 +257,9 @@ def right_span(read, five, min_overlap):
     else:  # no N's found, just need to determine whether this read overlaps
         # if a read doesn't span an intron, it doesn't support skipping.
         supports_skipping = False
-        if read.get_overlap(five+min_overlap, five+min_overlap+1) > 0:
+        if (read.get_overlap(five+min_overlap, five+min_overlap+1) > 0) and \
+                (read.get_overlap(five - 1, five) > 0):
+            print('supports inclusion')
             supports_inclusion = True
         else:
             supports_inclusion = False
@@ -323,7 +326,8 @@ def left_span(read, three, min_overlap):
         supports_skipping = False
         # if read.query_name == 'D80KHJN1:241:C5HF7ACXX:6:2113:2908:58516':
         #     print('left', read.get_overlap(three - min_overlap - 1, three - min_overlap))
-        if read.get_overlap(three - min_overlap - 1, three - min_overlap) > 0:
+        if (read.get_overlap(three - min_overlap - 1, three - min_overlap) > 0) and \
+                (read.get_overlap(three, three + 1) > 0):
             supports_inclusion = True
         else:
             supports_inclusion = False
@@ -348,7 +352,9 @@ def total_inclusion(read, five, three):
         return False
 
 
-def return_spliced_junction_counts(jxn_string, bam_file, min_overlap, library='reverse_pe'):
+def return_spliced_junction_counts(
+        jxn_string, bam_file, min_overlap, jxc_only, library='reverse_pe'
+):
     """
     Returns the junction inclusion and exclusion counts for a given junction.
     
@@ -360,6 +366,8 @@ def return_spliced_junction_counts(jxn_string, bam_file, min_overlap, library='r
         minimum overlap required to support site (1nt default)
     :param library: string
         default 'reverse_pe'
+    :param jxc_only: boolean
+        just count reads spanning junctions.
     :return: 
     """
     aligned_file = pysam.AlignmentFile(bam_file, "rb")
@@ -405,9 +413,9 @@ def return_spliced_junction_counts(jxn_string, bam_file, min_overlap, library='r
             elif supports_inclusion_right or supports_inclusion_left:
                 incl_names_list.append(read.query_name)
             # read supports inclusion if it's between two junctions
-            elif supports_total_inclusion:
+            elif supports_total_inclusion and not jxc_only:
                 incl_names_list.append(read.query_name)
-
+        print(supports_inclusion_left, supports_inclusion_right)
     # Removing duplicated skip_names will filter
     # double counting R1/R2 if they span the same region.
     for name in set(skip_names_list):
@@ -418,7 +426,7 @@ def return_spliced_junction_counts(jxn_string, bam_file, min_overlap, library='r
     return len(set(skip_names_list)), len(set(incl_names_list)), skip_names[:-1], incl_names[:-1]
 
 
-def get_junction_sites(jxn_list, bam_file, min_overlap, library):
+def get_junction_sites(jxn_list, bam_file, min_overlap, jxc_only, library):
     """
     returns the depth (number of reads supporting) a skipped event,
     the depth of an inclusion event, and the names of both events.
@@ -432,7 +440,7 @@ def get_junction_sites(jxn_list, bam_file, min_overlap, library):
     progress = trange(len(jxn_list))
     for jxn in jxn_list:
         skip_depth, incl_depth, skip_names, incl_names = return_spliced_junction_counts(
-            jxn, bam_file, min_overlap, library
+            jxn, bam_file, min_overlap, jxc_only, library
         )
         jxn_dict[jxn] = OrderedDict(
             {
@@ -481,6 +489,13 @@ def main():
         help='default "reverse_pe". Either reverse_pe, forward_pe, '
              'reverse_se, forward_se'
     )
+    parser.add_argument(
+        "--jxc_only",
+        required=False,
+        action='store_true',
+        default='False',
+        help='ignore any intronic reads, just count reads spanning junction sites'
+    )
     args = parser.parse_args()
 
     jxn_file = args.bed
@@ -488,6 +503,7 @@ def main():
     bam = args.bam
     min_overlap = args.min_overlap
     library = args.library
+    jxc_only = args.jxc_only
 
     jxn_list = []
     with open(jxn_file, 'r') as f:
@@ -498,7 +514,7 @@ def main():
             )
             jxn_list.append(jxn_string)
 
-    jxc_df = get_junction_sites(jxn_list, bam, min_overlap, library)
+    jxc_df = get_junction_sites(jxn_list, bam, min_overlap, jxc_only, library)
     jxc_df.to_csv(out_file, sep='\t')
 
 if __name__ == "__main__":
