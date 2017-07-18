@@ -11,11 +11,8 @@ from collections import defaultdict, OrderedDict
 
 
 def get_offset_m_basedon_n(
-        cigartuples, n,
-        include_jxn_span=True,
-        include_insertions=False,
-        include_deletions=True,
-        verbose=False
+        cigartuples, n, include_jxn_span=True, include_insertions=False,
+        include_deletions=True, verbose=False
 ):
     """
     for junction # n (0 based), return the left and right offsets m.
@@ -34,7 +31,7 @@ def get_offset_m_basedon_n(
     :param include_deletions: boolean
         if True, append the deletion lengths to either side
     :param verbose: 
-        if True, print out CIGAR info
+        if True, print out CIGAR info and debugging stuff
     :return: 
     """
 
@@ -113,6 +110,7 @@ def parse_interval_to_jxn_string(chrom, start, end, strand):
     :param interval: pybedtools.Interval
     :return jxn_string: string
     """
+    # TODO: deprecate this format
     return '{}:{}-{}:{}'.format(
         chrom,
         start,
@@ -132,7 +130,7 @@ def parse_jxn_string(jxn_string):
     return chrom, int(five), int(three), strand
 
 
-def passes_strand_filter(strand, read, reverse_stranded_pe_library=True):
+def passes_strand_filter(strand, read, library='reverse_pe'):
     """
     Given a library (TruSeq rstrand PE only for now), return True if
     the reads are on the proper strand.
@@ -141,11 +139,11 @@ def passes_strand_filter(strand, read, reverse_stranded_pe_library=True):
         either '+' or '-' indicating the strand of the gene
     :param read: pysam.AlignedSegment
         see: http://pysam.readthedocs.io/en/latest/api.html#pysam.AlignedSegment
-    :param reverse_stranded_pe_library: boolean
-        if True, expect reverse stranded PE library.
+    :param library: string
+        one of 'reverse_pe', 'forward_pe', 'reverse_se', forward_se'
     :return:
     """
-    if reverse_stranded_pe_library:
+    if library == 'reverse_pe':
         if strand == '+':
             if read.is_reverse and read.is_read2:
                 return False
@@ -160,8 +158,45 @@ def passes_strand_filter(strand, read, reverse_stranded_pe_library=True):
             print("wrong strand")
             return 1
         return True
+    elif library == 'forward_pe':
+        if strand == '+':
+            if read.is_reverse and read.is_read1:
+                return False
+            if not read.is_reverse and read.is_read2:
+                return False
+        elif strand == '-':
+            if read.is_reverse and read.is_read2:
+                return False
+            if not read.is_reverse and read.is_read1:
+                return False
+        else:
+            print("wrong strand")
+            return 1
+        return True
+    elif library == 'reverse_se':
+        if strand == '+':
+            if not read.is_reverse:
+                return False
+        elif strand == '-':
+            if read.is_reverse:
+                return False
+        else:
+            print("wrong strand")
+            return 1
+        return True
+    elif library == 'forward_se':
+        if strand == '+':
+            if read.is_reverse:
+                return False
+        elif strand == '-':
+            if not strand.is_reverse:
+                return False
+        else:
+            print("wrong strand")
+            return 1
+        return True
     else:
-        print("unimplemented")
+        print("wrong library")
         return 1
 
 
@@ -313,13 +348,18 @@ def total_inclusion(read, five, three):
         return False
 
 
-def return_spliced_junction_counts(jxn_string, bam_file, min_overlap):
+def return_spliced_junction_counts(jxn_string, bam_file, min_overlap, library):
     """
     Returns the junction inclusion and exclusion counts for a given junction.
     
-    :param jxn_string: 
-    :param bam_file: 
-    :param min_overlap: 
+    :param jxn_string: string
+        in the format "chr:start-end:strand"
+    :param bam_file: string
+        bam filename
+    :param min_overlap: int
+        minimum overlap required to support site (1nt default)
+    :param library: string
+        default 'reverse_pe'
     :return: 
     """
     aligned_file = pysam.AlignmentFile(bam_file, "rb")
@@ -336,7 +376,7 @@ def return_spliced_junction_counts(jxn_string, bam_file, min_overlap):
 
         ### WARNING THIS ASSUMES TRUSEQ PAIRED END ###
         ### INITIAL READ QC CHECKS ###
-        if (not passes_strand_filter(strand, read)) or \
+        if (not passes_strand_filter(strand, read, library)) or \
                 (not read.is_proper_pair) or \
                 read.is_qcfail or \
                 read.is_secondary:
@@ -433,12 +473,20 @@ def main():
         default=1,
         type=int
     )
+    parser.add_argument(
+        "--library",
+        required=False,
+        help='default "reverse_pe". Either reverse_pe, forward_pe, '
+             'reverse_se, forward_se'
+    )
     args = parser.parse_args()
 
     jxn_file = args.bed
     out_file = args.outfile
     bam = args.bam
     min_overlap = args.min_overlap
+    library = args.library
+
     jxn_list = []
     with open(jxn_file, 'r') as f:
         for line in f:
@@ -448,7 +496,7 @@ def main():
             )
             jxn_list.append(jxn_string)
 
-    jxc_df = get_junction_sites(jxn_list, bam, min_overlap)
+    jxc_df = get_junction_sites(jxn_list, bam, min_overlap, library)
     jxc_df.to_csv(out_file, sep='\t')
 
 if __name__ == "__main__":
