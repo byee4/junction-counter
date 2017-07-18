@@ -5,7 +5,7 @@ If you just want to count reads supporting splice junctions
 given an RNA-SEQ bam file and a spliced region,
 you can use this tool to do it quickly:
 
-![Alt text](junction_counter/images/chr10-100182270-100183359.png)
+![Alt text](images/chr10-100182270-100183359.png)
 
 Requirements:
 
