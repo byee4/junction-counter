@@ -6,9 +6,9 @@ basic module to use as an example.
 import argparse
 import pandas as pd
 import pysam
-
 from tqdm import trange
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
+
 
 def get_offset_m_basedon_n(
         cigartuples, n,
@@ -23,16 +23,30 @@ def get_offset_m_basedon_n(
     this function will return:
     (if no flags): 10, 15
     (if include_jxn_span): 110, 115
-    (if include_insertions):
+    ...
+    
+    :param cigartuples: list
+    :param n: int
+    :param include_jxn_span: boolean
+        if True, append the jxn span to either side
+    :param include_insertions: boolean
+        if True, append the insertion lengths to either side
+    :param include_deletions: boolean
+        if True, append the deletion lengths to either side
+    :param verbose: 
+        if True, print out CIGAR info
+    :return: 
     """
+
     all_counter = 0
     counter = 0
     left_accumulated_m = 0
     current_left_offset = 0
     current_right_offset = 0
+    # print(cigartuples, n)
     for t in cigartuples:
         if verbose:
-            print(t)
+            print('T: ', t)
         if t[0] == 0:
             left_accumulated_m += t[1]
         elif t[0] == 1 and include_insertions == True:  # insertion code
@@ -41,17 +55,24 @@ def get_offset_m_basedon_n(
             left_accumulated_m += t[1]
         elif t[0] == 3:
             if include_jxn_span:
-                current_left_offset = left_accumulated_m + t[1]
+                # print('adding {} to {}, {}'.format(
+                #   current_left_offset, left_accumulated_m, t[1])
+                # )
+                current_left_offset += left_accumulated_m + t[1]
             else:
-                current_left_offset = left_accumulated_m
+                current_left_offset += left_accumulated_m
+            left_accumulated_m = 0
             counter += 1
-
+            # print('counter = {}'.format(counter))
+            # print('current offset: {}'.format(current_left_offset))
+        if verbose:
+            print('current offset: {}'.format(current_left_offset))
         if counter >= n:
-            if verbose:
-                print("ALL COUNTER", all_counter)
+            # print("COUNTER greater than : {}, {}".format(counter, n))
+            # print("CURRENT OFFSET LEFT: {}".format(current_left_offset))
+            # print("ALL COUNTER", all_counter)
             for tr in cigartuples[all_counter:]:
-                if verbose:
-                    print("TR", tr)
+                # print("TR", tr)
                 if tr[0] == 0:
                     current_right_offset += tr[1]
                 elif tr[0] == 1 and include_insertions == True:
@@ -60,15 +81,24 @@ def get_offset_m_basedon_n(
                     current_right_offset += tr[1]
                 elif tr[0] == 3 and include_jxn_span == True:
                     current_right_offset += tr[1]
-
+            # print("RETURNING: {}, {}".format(
+            #   current_left_offset, current_right_offset)
+            # )
             return [current_left_offset, current_right_offset]
         all_counter += 1
+
     return [current_left_offset, current_right_offset]
 
 
 def get_jxc_counts_from_cigartuples(cigartuples):
     """
-    From a list of cigar tuples, return the number of junctions found (N's)
+    From a list of cigar tuples, return the number of introns found (N's) that
+    the reads supports/spans.
+
+    :param cigartuples: list
+        list of cigar tuples (usually from pysam.AlignedRead.cigartuples
+    :return count: int
+        number of N's found.
     """
     count = 0
     for t in cigartuples:
@@ -77,95 +107,300 @@ def get_jxc_counts_from_cigartuples(cigartuples):
     return count
 
 
+def parse_interval_to_jxn_string(chrom, start, end, strand):
+    """
+    Parses a genomic interval into a jxn-string format.
+    :param interval: pybedtools.Interval
+    :return jxn_string: string
+    """
+    return '{}:{}-{}:{}'.format(
+        chrom,
+        start,
+        end,
+        strand
+    )
+
+
 def parse_jxn_string(jxn_string):
     """
-    Parses a line like: chr:start-stop:strand to return
+    Parses a line like: chr:5'-3':strand to return
     these proper fields.
+    :param jxn_string: string
     """
     chrom, pos, strand = jxn_string.split(':')
-    start, stop = pos.split('-')
-    return chrom, int(start), int(stop), strand
+    five, three = pos.split('-')
+    return chrom, int(five), int(three), strand
+
+
+def passes_strand_filter(strand, read, reverse_stranded_pe_library=True):
+    """
+    Given a library (TruSeq rstrand PE only for now), return True if
+    the reads are on the proper strand.
+
+    :param strand: string
+        either '+' or '-' indicating the strand of the gene
+    :param read: pysam.AlignedSegment
+        see: http://pysam.readthedocs.io/en/latest/api.html#pysam.AlignedSegment
+    :param reverse_stranded_pe_library: boolean
+        if True, expect reverse stranded PE library.
+    :return:
+    """
+    if reverse_stranded_pe_library:
+        if strand == '+':
+            if read.is_reverse and read.is_read2:
+                return False
+            if not read.is_reverse and read.is_read1:
+                return False
+        elif strand == '-':
+            if read.is_reverse and read.is_read1:
+                return False
+            if not read.is_reverse and read.is_read2:
+                return False
+        else:
+            print("wrong strand")
+            return 1
+        return True
+    else:
+        print("unimplemented")
+        return 1
+
+
+def right_span(read, five, min_overlap):
+    """
+    Returns whether or a not a read that overlaps the 'right side' of the exon
+    supports an inclusion or an exclusion event.
+
+    :param read: pysam.AlignedSegment
+        pysam read that spans the
+    :param five: int
+        the lower genomic coordinate of an intron
+    :param min_overlap: int
+    :return:
+    """
+    supports_skipping = True  # initially treat this read as supporting jxn
+    supports_inclusion = True
+
+    ### LOOK AT JUNCTIONS DENOTED BY CIGAR ###
+    if 'N' in read.cigarstring:  # only consider reads with jxns
+        right_span = False  # assume that this read does not support any junction yet
+        jxc_count = get_jxc_counts_from_cigartuples(read.cigartuples)
+        ###
+        # Look at each junction that this read overlaps and see if any of them
+        # line up or stop at the one in focus. 'left span' refers to a read spanning
+        # the left side of an exon
+        ###
+        for j in range(1, jxc_count + 1):
+            # print("RIGHT SPAN", j, read.query_name)
+            left, right = get_offset_m_basedon_n(
+                read.cigartuples, j, True, True, True
+            )
+
+            left_wo, right_wo = get_offset_m_basedon_n(
+                read.cigartuples, j, False, False, False
+            )
+            if left_wo < min_overlap or right_wo < min_overlap:
+                right_span = False
+            elif read.reference_end - right == five:
+                right_span = True  # read supports a right jxc
+
+        if not right_span:
+            supports_skipping = False
+            # If no junctions line up, check the exon/intron boundaries
+            # We assume that this read overlaps the exon by at least one base,
+            # let's see if it overlaps an intron too
+            # if read.query_name == 'D80KHJN1:241:C5HF7ACXX:6:2113:2908:58516':
+            #     print('right', read.get_overlap(five+min_overlap, five+min_overlap+1))
+            if read.get_overlap(five+min_overlap, five+min_overlap+1) == 0:
+                supports_inclusion = False
+            else:
+                supports_inclusion = True
+        else:
+            supports_skipping = True
+            supports_inclusion = False
+
+    else:  # no N's found, just need to determine whether this read overlaps
+        # if a read doesn't span an intron, it doesn't support skipping.
+        supports_skipping = False
+        if read.get_overlap(five, five+min_overlap) > 0:
+            supports_inclusion = True
+        else:
+            supports_inclusion = False
+
+    return supports_skipping, supports_inclusion
+
+
+def left_span(read, three, min_overlap):
+    """
+    Returns whether or a not a read that overlaps the 'left side' of the exon
+    supports an inclusion or an exclusion event.
+
+    :param read:
+    :param three:
+    :param min_overlap:
+    :return:
+    """
+    supports_skipping = True  # initially treat this read as supporting jxn
+    supports_inclusion = True
+
+    ### LOOK AT JUNCTIONS DENOTED BY CIGAR ###
+    if 'N' in read.cigarstring:  # only consider reads with jxns
+        left_span = False  # assume that this read does not support any jxn yet
+        jxc_count = get_jxc_counts_from_cigartuples(read.cigartuples)
+        ###
+        # Look at each junction that this read overlaps and see
+        # if any of them line up or stop at the one in focus.
+        # 'left span' refers to a read spanning the left side of an exon
+        ###
+        for j in range(1, jxc_count + 1):
+            left, right = get_offset_m_basedon_n(
+                read.cigartuples, j, True, True, True
+            )
+            # This block handles overlaps
+            # (need minimum x offset to call a site included/excluded)
+            left_wo, right_wo = get_offset_m_basedon_n(
+                read.cigartuples, j, False, False, False
+            )
+            if left_wo < min_overlap or right_wo < min_overlap:
+                left_span = False
+
+            # print(j, read.reference_start, read.query_alignment_start, left,
+            # read.reference_start + read.query_alignment_start + left, three)
+            elif read.reference_start + read.query_alignment_start + left == three:
+                left_span = True  # read supports a left jxc
+
+        if not left_span:
+            supports_skipping = False
+            # If no junctions line up, check the exon/intron boundaries
+            # We assume that this read overlaps the exon by at least one base,
+            # let's see if it overlaps an intron too
+            if read.get_overlap(three-min_overlap, three) == 0:
+                supports_inclusion = False
+            else:
+                supports_inclusion = True
+        else:
+            supports_skipping = True
+            supports_inclusion = False
+
+    else:
+        # no N's found, so we just need to determine whether or not
+        # this read overlaps enough. If a read doesn't span an intron,
+        # it doesn't support skipping.
+        supports_skipping = False
+        # if read.query_name == 'D80KHJN1:241:C5HF7ACXX:6:2113:2908:58516':
+        #     print('left', read.get_overlap(three - min_overlap - 1, three - min_overlap))
+        if read.get_overlap(three - min_overlap - 1, three - min_overlap) > 0:
+            supports_inclusion = True
+        else:
+            supports_inclusion = False
+    return supports_skipping, supports_inclusion
+
+
+def total_inclusion(read, five, three):
+    """
+    Returns True if the read is completely within an intron boundary.
+
+    :param read: pysam.AlignedSegment
+        read
+    :param five: int
+        'lower' position of an intron
+    :param three: int
+        'upper' position of an intron
+    :return:
+    """
+    if read.reference_start >= five and read.reference_end <= three:
+        return True
+    else:
+        return False
 
 
 def return_spliced_junction_counts(jxn_string, bam_file, min_overlap):
+    """
+    Returns the junction inclusion and exclusion counts for a given junction.
+    
+    :param jxn_string: 
+    :param bam_file: 
+    :param min_overlap: 
+    :return: 
+    """
     aligned_file = pysam.AlignmentFile(bam_file, "rb")
-    chrom, start, stop, strand = parse_jxn_string(jxn_string)
+    chrom, five, three, strand = parse_jxn_string(jxn_string)
 
-    if start + 1 != stop:
-        print(
-        "WARNING: junction site is greater than 1 nt: {}".format(jxn_string))
+    skip_names_list = []
+    incl_names_list = []
+    skip_names = ''  # 'comma delimited' skip_names of reads supporting jxn
+    incl_names = ''
 
-    depth = 0  # initial number of reads supporting junction
-    names_list = []
-    names = ''  # string of 'comma delimited' names of all reads supporting junction
-    badflags = []  # flags of all the skipped reads, if failed QC (for debugging mostly)
+    for read in aligned_file.fetch(
+            chrom, five - min_overlap, three + min_overlap
+    ):  # five denotes 0-based start of intron
 
-    # jxn = '{}:{}-{}:{}'.format(row['chrom'],row['low_exon_end'],int(row['low_exon_end'])+1, row['strand'])
-    for read in aligned_file.fetch(chrom, start,
-                                   stop):  # get the reads which span this position
-        ### cigar_tuple codes:
-        # 0: match
-        # 3: skip
+        ### WARNING THIS ASSUMES TRUSEQ PAIRED END ###
+        ### INITIAL READ QC CHECKS ###
+        if (not passes_strand_filter(strand, read)) or \
+                (not read.is_proper_pair) or \
+                read.is_qcfail or \
+                read.is_secondary:
+            pass
+        else:
+            # does this read support inclusion or skipping from the right side
+            # of the exon/left side of the intron?
+            supports_skipping_right, supports_inclusion_right = right_span(
+                read, five, min_overlap
+            )
+            # does this read support inclusion or skipping from the left side
+            # of the exon/right side of the intron?
+            supports_skipping_left, supports_inclusion_left = left_span(
+                read, three, min_overlap
+            )
+            # does this read support inclusion/is located between two exons?
+            supports_total_inclusion = total_inclusion(
+                read, five, three
+            )
 
-        skip = False  # initially treat this read as supporting jxn
-        left_span = False  # assume that this read does not support any junction yet
-        right_span = False  # assume that this read does not support any junction yet
+            # read must support both the left and right side of a jxc
+            if supports_skipping_right and supports_skipping_left:
+                skip_names_list.append(read.query_name)
+            # read originating from one exon need only to be from one side.
+            elif supports_inclusion_right or supports_inclusion_left:
+                incl_names_list.append(read.query_name)
+            # read supports inclusion if it's between two junctions
+            elif supports_total_inclusion:
+                incl_names_list.append(read.query_name)
 
-        jxc_count = 0  # number of junctions in the read
-        if 'N' in read.cigarstring:  # only consider reads with jxns
-            ### WARNING THIS ASSUMES TRUSEQ PAIRED END ###
-            if read.is_reverse and read.is_read2:
-                skip = True
-            if not read.is_reverse and read.is_read1:
-                skip = True
+    # Removing duplicated skip_names will filter
+    # double counting R1/R2 if they span the same region.
+    for name in set(skip_names_list):
+        skip_names += name + ','
+    for name in set(incl_names_list):
+        incl_names += name + ','
 
-            if (
-            not read.is_proper_pair) or read.is_qcfail or read.is_secondary:
-                skip = True
-                badflags.append(read.flag)
-
-            jxc_count = get_jxc_counts_from_cigartuples(read.cigartuples)
-            ###
-            # Look at each junction that this read overlaps and see if any of them match
-            # the one in focus.
-            ###
-            for j in range(1, jxc_count + 1):
-                left, right = get_offset_m_basedon_n(
-                    read.cigartuples, j, True, True, True
-                )
-                left_wo, right_wo = get_offset_m_basedon_n(
-                    read.cigartuples, j, False, False, False
-                )
-                if left_wo < min_overlap or right_wo < min_overlap:
-                    skip = True
-                # if read.query_name == 'D80KHJN1:241:C5HF7ACXX:6:1105:6615:43587':
-                #     print("RIGHT", read.reference_end, right, int(row['low_exon_end']), read.flag, read.cigartuples)
-                #     print("LEFT", read.reference_start, read.query_alignment_start, left, int(row['low_exon_end']), read.flag)
-                ### need to filter out read1 whose: 1) same strand
-                # left span refers to this junction 'L', while right_span refers to R
-                #   [L======R]-----[L=========R]----...
-                if read.reference_start + read.query_alignment_start + left == start:
-                    left_span = True  # read supports a left jxc
-                if read.reference_end - right == start:
-                    right_span = True  # read supports a right jxc
-
-            if left_span == False and right_span == False:
-                skip = True
-            if not skip:
-                names_list.append(read.query_name)
-
-    ### Removing duplicated names will filter double counting R1/R2 if they span the same region.
-    for name in set(names_list):
-        names += name + ','
-    return len(set(names_list)), names[:-1]
+    return len(set(skip_names_list)), len(set(incl_names_list)), skip_names[:-1], incl_names[:-1]
 
 
 def get_junction_sites(jxn_list, bam_file, min_overlap):
+    """
+    returns the depth (number of reads supporting) a skipped event,
+    the depth of an inclusion event, and the names of both events.
+
+    :param jxn_list:
+    :param bam_file:
+    :param min_overlap:
+    :return:
+    """
     jxn_dict = defaultdict(dict)
     progress = trange(len(jxn_list))
     for jxn in jxn_list:
-        depth, names = return_spliced_junction_counts(jxn, bam_file, min_overlap)
-        jxn_dict[jxn] = {'depth': depth, 'names': names}
+        skip_depth, incl_depth, skip_names, incl_names = return_spliced_junction_counts(
+            jxn, bam_file, min_overlap
+        )
+        jxn_dict[jxn] = OrderedDict(
+            {
+                'skip_depth': skip_depth, 'incl_depth': incl_depth,
+                'skip_names': skip_names, 'incl_names': incl_names
+            }
+        )
+
+
         progress.update(1)
     return pd.DataFrame(jxn_dict).T
 
@@ -177,33 +412,41 @@ def main():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--jxn_file",
+        "--bed",
         required=True,
+        help="a bed file containing intron/spliced exon positions to check"
     )
     parser.add_argument(
         "--bam",
         required=True,
+        help='a bam file with an index (.bai) in the same location'
     )
     parser.add_argument(
         "--outfile",
         required=True,
+        help='outputs a tab separated file containing depth and read names for'
+             'each splice event'
     )
     parser.add_argument(
         "--min_overlap",
         required=False,
-        default=0,
+        default=1,
         type=int
     )
     args = parser.parse_args()
 
-    jxn_file = args.jxn_file
+    jxn_file = args.bed
     out_file = args.outfile
     bam = args.bam
     min_overlap = args.min_overlap
     jxn_list = []
     with open(jxn_file, 'r') as f:
         for line in f:
-            jxn_list.append(line.rstrip())
+            chrom, start, end, _, _, strand = line.rstrip().split('\t')
+            jxn_string = parse_interval_to_jxn_string(
+                chrom, start, end, strand
+            )
+            jxn_list.append(jxn_string)
 
     jxc_df = get_junction_sites(jxn_list, bam, min_overlap)
     jxc_df.to_csv(out_file, sep='\t')
