@@ -371,7 +371,8 @@ def return_spliced_junction_counts(jxn_string, bam_file, min_overlap, library='r
     incl_names = ''
 
     for read in aligned_file.fetch(
-            chrom, five - min_overlap, three + min_overlap
+        chrom, five-1, three+1
+            # chrom, five - min_overlap, three + min_overlap
     ):  # five denotes 0-based start of intron
 
         ### WARNING THIS ASSUMES TRUSEQ PAIRED END ###
@@ -417,7 +418,7 @@ def return_spliced_junction_counts(jxn_string, bam_file, min_overlap, library='r
     return len(set(skip_names_list)), len(set(incl_names_list)), skip_names[:-1], incl_names[:-1]
 
 
-def get_junction_sites(jxn_list, bam_file, min_overlap):
+def get_junction_sites(jxn_list, bam_file, min_overlap, library):
     """
     returns the depth (number of reads supporting) a skipped event,
     the depth of an inclusion event, and the names of both events.
@@ -431,7 +432,7 @@ def get_junction_sites(jxn_list, bam_file, min_overlap):
     progress = trange(len(jxn_list))
     for jxn in jxn_list:
         skip_depth, incl_depth, skip_names, incl_names = return_spliced_junction_counts(
-            jxn, bam_file, min_overlap
+            jxn, bam_file, min_overlap, library
         )
         jxn_dict[jxn] = OrderedDict(
             {
@@ -476,6 +477,7 @@ def main():
     parser.add_argument(
         "--library",
         required=False,
+        default='reverse_pe',
         help='default "reverse_pe". Either reverse_pe, forward_pe, '
              'reverse_se, forward_se'
     )
