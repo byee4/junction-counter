@@ -4,11 +4,11 @@ import pysam
 """
 To create a single read bam file:
 
-samtools view data/ENCFF756RDZ.bam | grep 'D80KHJN1:241:C5HF7ACXX:6:2113:6890:67612' > \
+samtools view data/ENCFF468DJE.bam | grep 'DF8F08P1:365:C60G9ACXX:5:1208:17397:64846' > \
 data/tmp.sam;
 cat data/header.txt data/tmp.sam | samtools view \
--bS > junction_counter/test/bams/single_junction_skip_4.bam;
-samtools index junction_counter/test/bams/single_junction_skip_4.bam
+-bS > junction_counter/test/bams/multi_junction_skip_2.bam;
+samtools index junction_counter/test/bams/multi_junction_skip_2.bam
 """
 def single_jxn_skip_overlapping_mate_1():
     """
@@ -74,6 +74,13 @@ def multi_jxn_skip_1():
     """
     return 'bams/multi_junction_skip_1.bam'
 
+def multi_jxn_skip_2():
+    """
+    DF8F08P1:365:C60G9ACXX:5:1208:17397:64846
+    :return:
+    """
+    return 'bams/multi_junction_skip_2.bam'
+
 def inclusion_1():
     """
     D80KHJN1:241:C5HF7ACXX:6:1213:6350:10569
@@ -123,6 +130,14 @@ def inclusion_7():
     """
     return 'bams/inclusion_7.bam'
 
+def indel_1():
+    """
+    DF8F08P1:365:C60G9ACXX:5:2313:8791:67629
+    (From ENCFF468DJE.bam)
+    :return:
+    """
+    return 'bams/indel_1.bam'
+
 def test_right_span_1():
     print("Tests a single read with a single junction N")
     print("Region: chr10:135209281-135209666:+")
@@ -162,7 +177,7 @@ def test_single_junction_skip_1():
     min_overlap = 1
     jxc_only = False
     jxc_coord = 'chr10:135209281-135209666:+'
-    sk, inc, skn, incn = j.return_spliced_junction_counts(
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
         jxc_coord, bam, min_overlap, jxc_only
     )
     assert sk == 1
@@ -213,7 +228,7 @@ def test_single_junction_skip_2():
     jxc_only = False
     jxc_coord = 'chr10:122666367-122668067:+'
     library = 'reverse_pe'
-    sk, inc, skn, incn = j.return_spliced_junction_counts(
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
         jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
@@ -230,7 +245,7 @@ def test_single_junction_skip_2_2():
     jxc_only = False
     jxc_coord = 'chr10:122666367-122668067:+'
     library = 'reverse_pe'
-    sk, inc, skn, incn = j.return_spliced_junction_counts(
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
         jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 1
@@ -249,7 +264,7 @@ def test_single_junction_skip_2_3():
     jxc_only = True
     jxc_coord = 'chr10:122666367-122668067:+'
     library = 'reverse_pe'
-    sk, inc, skn, incn = j.return_spliced_junction_counts(
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
         jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 1
@@ -298,7 +313,7 @@ def test_single_junction_skip_4():
     jxc_only = False
     jxc_coord = 'chr10:122666367-122668067:+'
     library = 'reverse_pe'
-    sk, inc, skn, incn = j.return_spliced_junction_counts(
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
         jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
@@ -315,7 +330,7 @@ def test_single_junction_no_skip_1():
     jxc_only = False
     jxc_coord = 'chr16:83842351-83842909:+'
     library = 'reverse_pe'
-    sk, inc, skn, incn = j.return_spliced_junction_counts(
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
         jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
@@ -332,7 +347,7 @@ def test_single_junction_no_skip_2():
     jxc_only = False
     jxc_coord = 'chr1:40319740-40322948:-'
     library = 'reverse_pe'
-    sk, inc, skn, incn = j.return_spliced_junction_counts(
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
         jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
@@ -354,7 +369,7 @@ def test_single_junction_overlapping_mate_1():
     jxc_only = False
     jxc_coord = 'chr16:83842351-83842909:+' # ENST00000433866.2_intron_1_0_chr16_83842352_f
     library = 'reverse_pe'
-    sk, inc, skn, incn = j.return_spliced_junction_counts(
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
         jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 1
@@ -372,7 +387,7 @@ def test_single_junction_overlapping_mate_2():
     jxc_only = False
     library = 'reverse_pe'
     jxc_coord = 'chr1:40319740-40322948:-'
-    sk, inc, skn, incn = j.return_spliced_junction_counts(
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
         jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 1
@@ -391,7 +406,7 @@ def test_multi_junction_skip_1():
     jxc_only = False
     jxc_coord = 'chr10:135212730-135213032:+'
     library = 'reverse_pe'
-    sk, inc, skn, incn = j.return_spliced_junction_counts(
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
         jxc_coord, bam, min_overlap, jxc_only, library
     )
 
@@ -410,7 +425,7 @@ def test_inclusion_1():
     jxc_only = False
     jxc_coord = 'chr1:40319740-40322948:-'
     library = 'reverse_pe'
-    sk, inc, skn, incn = j.return_spliced_junction_counts(
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
         jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
@@ -428,7 +443,7 @@ def test_inclusion_2():
     jxc_only = False
     jxc_coord = 'chr1:40319740-40322948:-'
     library = 'reverse_pe'
-    sk, inc, skn, incn = j.return_spliced_junction_counts(
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
         jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
@@ -446,7 +461,7 @@ def test_inclusion_4():
     jxc_only = False
     jxc_coord = 'chr1:40319740-40322948:-'
     library = 'reverse_pe'
-    sk, inc, skn, incn = j.return_spliced_junction_counts(
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
         jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
@@ -465,7 +480,7 @@ def test_inclusion_5():
     jxc_only = False
     library = 'reverse_pe'
     jxc_coord = 'chr10:14883239-14884108:+'
-    sk, inc, skn, incn = j.return_spliced_junction_counts(
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
         jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
@@ -484,7 +499,7 @@ def test_inclusion_6():
     jxc_only = True
     library = 'reverse_pe'
     jxc_coord = 'chr10:14882156-14884108:+'
-    sk, inc, skn, incn = j.return_spliced_junction_counts(
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
         jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
@@ -519,11 +534,31 @@ def test_inclusion_7():
     jxc_only = False
     library = 'reverse_pe'
     jxc_coord = 'chr10:122666367-122668067:+'
-    sk, inc, skn, incn = j.return_spliced_junction_counts(
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
         jxc_coord, bam, min_overlap, jxc_only, library
     )
     assert sk == 0
     assert inc == 1
+
+### TEST INDEL ###
+
+def test_indel_1():
+    print("Tests whether a read with indels (2I) is correctly"
+          "counted as an exclusion read")
+    print("Region: chr9:108151389-108151467:+")
+    print("Read: DF8F08P1:365:C60G9ACXX:5:2313:8791:67629")
+    print("Read should be called as excluded and not included.")
+    bam = indel_1()
+    min_overlap = 10
+    jxc_only = False
+    library = 'reverse_pe'
+    jxc_coord = 'chr9:108151389-108151467:+'
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
+        jxc_coord, bam, min_overlap, jxc_only, library
+    )
+    assert sk == 1
+    assert inc == 0
+
 
 ### TEST GET_OFFSET_M_BASEDON_N ###
 

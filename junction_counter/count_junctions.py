@@ -227,7 +227,7 @@ def right_span(read, five, min_overlap):
         for j in range(1, jxc_count + 1):
             # print("RIGHT SPAN", j, read.query_name)
             left, right = get_offset_m_basedon_n(
-                read.cigartuples, j, True, True, True
+                read.cigartuples, j, True, False, True
             )
 
             left_wo, right_wo = get_offset_m_basedon_n(
@@ -237,6 +237,7 @@ def right_span(read, five, min_overlap):
                 right_span = False
             elif read.reference_end - right == five:
                 right_span = True  # read supports a right jxc
+                break
 
         if not right_span:
             supports_skipping = False
@@ -259,7 +260,6 @@ def right_span(read, five, min_overlap):
         supports_skipping = False
         if (read.get_overlap(five+min_overlap, five+min_overlap+1) > 0) and \
                 (read.get_overlap(five - 1, five) > 0):
-            print('supports inclusion')
             supports_inclusion = True
         else:
             supports_inclusion = False
@@ -291,13 +291,25 @@ def left_span(read, three, min_overlap):
         ###
         for j in range(1, jxc_count + 1):
             left, right = get_offset_m_basedon_n(
-                read.cigartuples, j, True, True, True
+                read.cigartuples, j, True, False, True
             )
             # This block handles overlaps
             # (need minimum x offset to call a site included/excluded)
             left_wo, right_wo = get_offset_m_basedon_n(
                 read.cigartuples, j, False, False, False
             )
+            '''
+            if read.query_name == 'DF8F08P1:365:C60G9ACXX:5:2303:6181:53122':
+                print("FLAG", read.flag)
+                print("CIGAR TUPLES", read.cigartuples)
+                print("left: {}".format(left))
+                print("right: {}".format(right))
+                print("ref start: {}".format(read.reference_start))
+                print("read start: {}".format(read.query_alignment_start))
+                print("three: {}".format(three))
+                print("refstart + qstart + left: {}".format(read.reference_start + read.query_alignment_start + left))
+                print("left span: {}".format(left_span))
+            '''
             if left_wo < min_overlap or right_wo < min_overlap:
                 left_span = False
 
@@ -305,6 +317,8 @@ def left_span(read, three, min_overlap):
             # read.reference_start + read.query_alignment_start + left, three)
             elif read.reference_start + read.query_alignment_start + left == three:
                 left_span = True  # read supports a left jxc
+                break
+
 
         if not left_span:
             supports_skipping = False
@@ -375,14 +389,18 @@ def return_spliced_junction_counts(
 
     skip_names_list = []
     incl_names_list = []
+    five_prime_incl_list = []
+    three_prime_incl_list = []
+
     skip_names = ''  # 'comma delimited' skip_names of reads supporting jxn
     incl_names = ''
+    three_prime_incl_names = ''
+    five_prime_incl_names = ''
 
     for read in aligned_file.fetch(
         chrom, five-1, three+1
             # chrom, five - min_overlap, three + min_overlap
     ):  # five denotes 0-based start of intron
-
         ### WARNING THIS ASSUMES TRUSEQ PAIRED END ###
         ### INITIAL READ QC CHECKS ###
         if (not passes_strand_filter(strand, read, library)) or \
@@ -391,6 +409,7 @@ def return_spliced_junction_counts(
                 read.is_secondary:
             pass
         else:
+
             # does this read support inclusion or skipping from the right side
             # of the exon/left side of the intron?
             supports_skipping_right, supports_inclusion_right = right_span(
@@ -405,17 +424,38 @@ def return_spliced_junction_counts(
             supports_total_inclusion = total_inclusion(
                 read, five, three
             )
-
+            '''
+            if read.query_name == 'DF8F08P1:365:C60G9ACXX:5:2303:6181:53122':
+                print("{}:{}-{}:{}".format(chrom, five, three, strand))
+                print(supports_skipping_left, supports_skipping_right)
+            '''
             # read must support both the left and right side of a jxc
             if supports_skipping_right and supports_skipping_left:
                 skip_names_list.append(read.query_name)
             # read originating from one exon need only to be from one side.
             elif supports_inclusion_right or supports_inclusion_left:
                 incl_names_list.append(read.query_name)
+                if supports_inclusion_left:
+                    if strand == '+':
+                        five_prime_incl_list.append(read.query_name)
+                    elif strand == '-':
+                        three_prime_incl_list.append(read.query_name)
+                    else:
+                        print('strand error: {}'.format(strand))
+                        exit(1)
+                elif supports_inclusion_right:
+                    if strand == '+':
+                        three_prime_incl_list.append(read.query_name)
+                    elif strand == '-':
+                        five_prime_incl_list.append(read.query_name)
+                    else:
+                        print('strand error: {}'.format(strand))
+                        exit(1)
+
             # read supports inclusion if it's between two junctions
             elif supports_total_inclusion and not jxc_only:
                 incl_names_list.append(read.query_name)
-        print(supports_inclusion_left, supports_inclusion_right)
+
     # Removing duplicated skip_names will filter
     # double counting R1/R2 if they span the same region.
     for name in set(skip_names_list):
@@ -423,7 +463,15 @@ def return_spliced_junction_counts(
     for name in set(incl_names_list):
         incl_names += name + ','
 
-    return len(set(skip_names_list)), len(set(incl_names_list)), skip_names[:-1], incl_names[:-1]
+
+    # for name in set(five_prime_incl_list):
+    #     three_prime_incl_names += name + ','
+    # for name in set(three_prime_incl_list):
+    #     five_prime_incl_names += name + ','
+
+    return len(set(skip_names_list)), len(set(incl_names_list)), \
+           skip_names[:-1], incl_names[:-1], \
+           len(set(three_prime_incl_list)), len(set(five_prime_incl_list))
 
 
 def get_junction_sites(jxn_list, bam_file, min_overlap, jxc_only, library):
@@ -438,19 +486,25 @@ def get_junction_sites(jxn_list, bam_file, min_overlap, jxc_only, library):
     """
     jxn_dict = defaultdict(dict)
     progress = trange(len(jxn_list))
+    next = 0
     for jxn in jxn_list:
-        skip_depth, incl_depth, skip_names, incl_names = return_spliced_junction_counts(
+        skip_depth, incl_depth, skip_names, \
+        incl_names, three_depth, five_depth = return_spliced_junction_counts(
             jxn, bam_file, min_overlap, jxc_only, library
         )
-        jxn_dict[jxn] = OrderedDict(
+        jxn_dict[next] = OrderedDict(
             {
+                'jxn': jxn,
                 'skip_depth': skip_depth, 'incl_depth': incl_depth,
-                'skip_names': skip_names, 'incl_names': incl_names
+                'skip_names': skip_names, 'incl_names': incl_names,
+                'three_prime_incl_depth' : three_depth,
+                'five_prime_incl_depth' : five_depth
             }
         )
 
-
+        next+=1
         progress.update(1)
+    print(pd.DataFrame(jxn_dict).T.shape)
     return pd.DataFrame(jxn_dict).T
 
 
