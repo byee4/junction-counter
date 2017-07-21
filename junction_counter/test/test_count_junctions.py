@@ -4,11 +4,11 @@ import pysam
 """
 To create a single read bam file:
 
-samtools view data/ENCFF468DJE.bam | grep 'DF8F08P1:365:C60G9ACXX:5:1208:17397:64846' > \
+samtools view data/ENCFF468DJE.bam | grep 'DF8F08P1:365:C60G9ACXX:5:2111:10416:51891' > \
 data/tmp.sam;
 cat data/header.txt data/tmp.sam | samtools view \
--bS > junction_counter/test/bams/multi_junction_skip_2.bam;
-samtools index junction_counter/test/bams/multi_junction_skip_2.bam
+-bS > junction_counter/test/bams/inclusion_8.bam;
+samtools index junction_counter/test/bams/inclusion_8.bam
 """
 def single_jxn_skip_overlapping_mate_1():
     """
@@ -129,6 +129,13 @@ def inclusion_7():
     :return:
     """
     return 'bams/inclusion_7.bam'
+
+def inclusion_8():
+    """
+    DF8F08P1:365:C60G9ACXX:5:2111:10416:51891
+    :return:
+    """
+    return 'bams/inclusion_8.bam'
 
 def indel_1():
     """
@@ -539,6 +546,24 @@ def test_inclusion_7():
     )
     assert sk == 0
     assert inc == 1
+
+def test_inclusion_8():
+    print("Tests whether a read that is not an inclusion read "
+          "even though it might look like one. The strand is not"
+          "correct.")
+    print("Region: chr6:43496663-43498425:-")
+    print("Read: DF8F08P1:365:C60G9ACXX:5:2111:10416:51891")
+    print("Read should not be included or excluded.")
+    bam = inclusion_8()
+    min_overlap = 1
+    jxc_only = False
+    library = 'reverse_pe'
+    jxc_coord = 'chr6:43496663-43498425:-'
+    sk, inc, skn, incn, _, _ = j.return_spliced_junction_counts(
+        jxc_coord, bam, min_overlap, jxc_only, library
+    )
+    assert sk == 0
+    assert inc == 0
 
 ### TEST INDEL ###
 

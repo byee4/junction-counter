@@ -156,7 +156,8 @@ def passes_strand_filter(strand, read, library='reverse_pe'):
                 return False
         else:
             print("wrong strand")
-            return 1
+            exit(1)
+
         return True
     elif library == 'forward_pe':
         if strand == '+':
@@ -171,7 +172,8 @@ def passes_strand_filter(strand, read, library='reverse_pe'):
                 return False
         else:
             print("wrong strand")
-            return 1
+            exit(1)
+
         return True
     elif library == 'reverse_se':
         if strand == '+':
@@ -182,7 +184,8 @@ def passes_strand_filter(strand, read, library='reverse_pe'):
                 return False
         else:
             print("wrong strand")
-            return 1
+            exit(1)
+
         return True
     elif library == 'forward_se':
         if strand == '+':
@@ -193,11 +196,12 @@ def passes_strand_filter(strand, read, library='reverse_pe'):
                 return False
         else:
             print("wrong strand")
-            return 1
+            exit(1)
+
         return True
     else:
         print("wrong library")
-        return 1
+        exit(1)
 
 
 def right_span(read, five, min_overlap):
@@ -244,8 +248,7 @@ def right_span(read, five, min_overlap):
             # If no junctions line up, check the exon/intron boundaries
             # We assume that this read overlaps the exon by at least one base,
             # let's see if it overlaps an intron too
-            # if read.query_name == 'D80KHJN1:241:C5HF7ACXX:6:2113:2908:58516':
-            #     print('right', read.get_overlap(five+min_overlap, five+min_overlap+1))
+
             if (read.get_overlap(five+min_overlap, five+min_overlap+1) > 0) and \
                     (read.get_overlap(five - 1, five) > 0):
                 supports_inclusion = True
@@ -298,18 +301,7 @@ def left_span(read, three, min_overlap):
             left_wo, right_wo = get_offset_m_basedon_n(
                 read.cigartuples, j, False, False, False
             )
-            '''
-            if read.query_name == 'DF8F08P1:365:C60G9ACXX:5:2303:6181:53122':
-                print("FLAG", read.flag)
-                print("CIGAR TUPLES", read.cigartuples)
-                print("left: {}".format(left))
-                print("right: {}".format(right))
-                print("ref start: {}".format(read.reference_start))
-                print("read start: {}".format(read.query_alignment_start))
-                print("three: {}".format(three))
-                print("refstart + qstart + left: {}".format(read.reference_start + read.query_alignment_start + left))
-                print("left span: {}".format(left_span))
-            '''
+
             if left_wo < min_overlap or right_wo < min_overlap:
                 left_span = False
 
@@ -318,7 +310,6 @@ def left_span(read, three, min_overlap):
             elif read.reference_start + read.query_alignment_start + left == three:
                 left_span = True  # read supports a left jxc
                 break
-
 
         if not left_span:
             supports_skipping = False
@@ -338,8 +329,7 @@ def left_span(read, three, min_overlap):
         # this read overlaps enough. If a read doesn't span an intron,
         # it doesn't support skipping.
         supports_skipping = False
-        # if read.query_name == 'D80KHJN1:241:C5HF7ACXX:6:2113:2908:58516':
-        #     print('left', read.get_overlap(three - min_overlap - 1, three - min_overlap))
+
         if (read.get_overlap(three - min_overlap - 1, three - min_overlap) > 0) and \
                 (read.get_overlap(three, three + 1) > 0):
             supports_inclusion = True
@@ -403,13 +393,13 @@ def return_spliced_junction_counts(
     ):  # five denotes 0-based start of intron
         ### WARNING THIS ASSUMES TRUSEQ PAIRED END ###
         ### INITIAL READ QC CHECKS ###
+
         if (not passes_strand_filter(strand, read, library)) or \
                 (not read.is_proper_pair) or \
                 read.is_qcfail or \
                 read.is_secondary:
             pass
         else:
-
             # does this read support inclusion or skipping from the right side
             # of the exon/left side of the intron?
             supports_skipping_right, supports_inclusion_right = right_span(
@@ -424,34 +414,29 @@ def return_spliced_junction_counts(
             supports_total_inclusion = total_inclusion(
                 read, five, three
             )
-            '''
-            if read.query_name == 'DF8F08P1:365:C60G9ACXX:5:2303:6181:53122':
-                print("{}:{}-{}:{}".format(chrom, five, three, strand))
-                print(supports_skipping_left, supports_skipping_right)
-            '''
             # read must support both the left and right side of a jxc
             if supports_skipping_right and supports_skipping_left:
                 skip_names_list.append(read.query_name)
             # read originating from one exon need only to be from one side.
             elif supports_inclusion_right or supports_inclusion_left:
                 incl_names_list.append(read.query_name)
-                if supports_inclusion_left:
+                # code block determines which 'side' the read supports inclusion from.
+                if supports_inclusion_right:
                     if strand == '+':
                         five_prime_incl_list.append(read.query_name)
                     elif strand == '-':
                         three_prime_incl_list.append(read.query_name)
                     else:
-                        print('strand error: {}'.format(strand))
+                        print('strand error: {}'.format(jxn_string))
                         exit(1)
-                elif supports_inclusion_right:
+                elif supports_inclusion_left:
                     if strand == '+':
                         three_prime_incl_list.append(read.query_name)
                     elif strand == '-':
                         five_prime_incl_list.append(read.query_name)
                     else:
-                        print('strand error: {}'.format(strand))
+                        print('strand error: {}'.format(jxn_string))
                         exit(1)
-
             # read supports inclusion if it's between two junctions
             elif supports_total_inclusion and not jxc_only:
                 incl_names_list.append(read.query_name)
@@ -474,7 +459,7 @@ def return_spliced_junction_counts(
            len(set(three_prime_incl_list)), len(set(five_prime_incl_list))
 
 
-def get_junction_sites(jxn_list, bam_file, min_overlap, jxc_only, library):
+def get_junction_sites(jxn_list, bam_file, min_overlap, jxc_only, library, report_names):
     """
     returns the depth (number of reads supporting) a skipped event,
     the depth of an inclusion event, and the names of both events.
@@ -486,7 +471,8 @@ def get_junction_sites(jxn_list, bam_file, min_overlap, jxc_only, library):
     """
     jxn_dict = defaultdict(dict)
     progress = trange(len(jxn_list))
-    next = 0
+    next = 0 # hacky way to report all junctions, even duplicate ones...
+
     for jxn in jxn_list:
         skip_depth, incl_depth, skip_names, \
         incl_names, three_depth, five_depth = return_spliced_junction_counts(
@@ -501,11 +487,20 @@ def get_junction_sites(jxn_list, bam_file, min_overlap, jxc_only, library):
                 'five_prime_incl_depth' : five_depth
             }
         )
-
         next+=1
         progress.update(1)
-    print(pd.DataFrame(jxn_dict).T.shape)
-    return pd.DataFrame(jxn_dict).T
+    df = pd.DataFrame(jxn_dict).T
+    if report_names:
+        df = df[[
+            'jxn','skip_depth','skip_names','incl_depth','incl_names',
+            'three_prime_incl_depth','five_prime_incl_depth'
+        ]]
+    else:
+        df = df[[
+            'jxn', 'skip_depth', 'incl_depth',
+            'three_prime_incl_depth', 'five_prime_incl_depth'
+        ]]
+    return df
 
 
 def main():
@@ -547,8 +542,15 @@ def main():
         "--jxc_only",
         required=False,
         action='store_true',
-        default='False',
+        default=False,
         help='ignore any intronic reads, just count reads spanning junction sites'
+    )
+    parser.add_argument(
+        "--report_names",
+        required=False,
+        action='store_true',
+        default=False,
+        help='also report the readnames for each jxn (Warning: may blow up the size of the file!)'
     )
     args = parser.parse_args()
 
@@ -558,6 +560,7 @@ def main():
     min_overlap = args.min_overlap
     library = args.library
     jxc_only = args.jxc_only
+    report_names = args.report_names
 
     jxn_list = []
     with open(jxn_file, 'r') as f:
@@ -568,7 +571,9 @@ def main():
             )
             jxn_list.append(jxn_string)
 
-    jxc_df = get_junction_sites(jxn_list, bam, min_overlap, jxc_only, library)
+    jxc_df = get_junction_sites(
+        jxn_list, bam, min_overlap, jxc_only, library, report_names
+    )
     jxc_df.to_csv(out_file, sep='\t')
 
 if __name__ == "__main__":
