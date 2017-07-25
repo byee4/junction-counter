@@ -242,7 +242,7 @@ def right_span(read, five, min_overlap):
             elif read.reference_end - right == five:
                 right_span = True  # read supports a right jxc
                 break
-
+            # print(read.reference_end, right, read.reference_end - right, five)
         if not right_span:
             supports_skipping = False
             # If no junctions line up, check the exon/intron boundaries
@@ -394,8 +394,9 @@ def return_spliced_junction_counts(
         ### WARNING THIS ASSUMES TRUSEQ PAIRED END ###
         ### INITIAL READ QC CHECKS ###
 
+        if (library == 'reverse_pe' or library == 'forward_pe') and (not read.is_proper_pair):
+            pass
         if (not passes_strand_filter(strand, read, library)) or \
-                (not read.is_proper_pair) or \
                 read.is_qcfail or \
                 read.is_secondary:
             pass
@@ -405,11 +406,13 @@ def return_spliced_junction_counts(
             supports_skipping_right, supports_inclusion_right = right_span(
                 read, five, min_overlap
             )
+            # print(supports_skipping_right)
             # does this read support inclusion or skipping from the left side
             # of the exon/right side of the intron?
             supports_skipping_left, supports_inclusion_left = left_span(
                 read, three, min_overlap
             )
+            # print(supports_skipping_left)
             # does this read support inclusion/is located between two exons?
             supports_total_inclusion = total_inclusion(
                 read, five, three
@@ -543,7 +546,7 @@ def main():
         required=False,
         action='store_true',
         default=False,
-        help='ignore any intronic reads, just count reads spanning junction sites'
+        help='ignore any completely intronic reads, just count reads spanning junction sites'
     )
     parser.add_argument(
         "--report_names",
