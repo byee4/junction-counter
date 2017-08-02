@@ -10,27 +10,32 @@ you can use this tool to do it quickly:
 
 Requirements:
 
+Refer to the 'environments.yaml' file for the conda env I tested with, or create your own:
 ```
-samtools
-pysam
-pandas
-tqdm
+conda create -n jxc python=2.7 samtools=1.4.1 pysam=0.11.2 tqdm pandas
+conda install -c conda-forge bzip2
 ```
 
-(there's a weird shared libraries problem with samtools, but
-assuming you can get around that, these packages are all you need
-to run).
+Then run:
+```
+source activate jxc
+git clone https://github.com/byee4/junction-counter
+python setup.py build
+python setup.py install
+```
 
 Usage:
 
 Refer to the bash script run_junction_counter.sh
 
 ```
-python junction_counter/count_junctions.py \
---bed data/intron_jxnlist.bed \
---bam ENCFF756RDZ.bam \
---outfile data/output.txt \
---min_overlap 1
+count-junctions \
+--bed data/intron_jxnlist.bed \     # bedfile containing introns (NOTE: make sure these are 0-based BED files of introns)
+--bam ENCFF756RDZ.bam \             # alignment bam file
+--outfile data/output.txt \         # output file
+--min_overlap 1 \                   # requires each read to cover this many bases to be counted as supporting either intron or exon.
+--jxc_only \                        # count only reads spanning junctions
+--report_names                      # report the names of all reads (WARNING: this might make the file BIG)
 ```
 
 # More stuff
