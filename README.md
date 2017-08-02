@@ -39,10 +39,6 @@ count-junctions \
 ```
 
 # More stuff
-jxnlist.txt contains a bedfile of introns we want to count junctions for
-
-output.txt contains the junction list, the number of reads supporting that junction,
-and the read names supporting that junction.
 
 You can download the BAM file [here](https://www.encodeproject.org/files/ENCFF756RDZ/@@download/ENCFF756RDZ.bam)
  (make sure to index this as well!)
