@@ -4,7 +4,7 @@ Basically a few steps upstream of any splicing algorithm. It doesn't do
 anything fancy like detect novel splice junctions, but it doesn't take that long to run.
 If you just want to count reads supporting splice junctions
 given an RNA-SEQ bam file and a spliced region,
-you can use this tool to do it quickly:
+you can use this tool to do it in a somewhat timely manner (unless you have tons of introns :/):
 
 ![Alt text](images/chr10-100182270-100183359.png)
 
