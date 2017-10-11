@@ -13,12 +13,13 @@ Requirements:
 Refer to the 'environments.yaml' file for the conda env I tested with, or create your own:
 ```
 conda create -n jxc python=2.7 samtools=1.4.1 pysam=0.11.2 tqdm pandas
+source activate jxc
 conda install -c conda-forge bzip2
 ```
 
 Then run:
 ```
-source activate jxc
+source activate jxc # if you haven't already done this
 git clone https://github.com/byee4/junction-counter
 python setup.py build
 python setup.py install
